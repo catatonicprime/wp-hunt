@@ -58,9 +58,12 @@ class RipsScanner(WPScanner):
         if statSoup is None:
             print ("Failed to scan " + plugin.Name)
             return
+        if statSoup('table')[1]('tr') != 'No vulnerabilities found.':
+            print ('\033[93m')
         print (statSoup('table')[0].text + ':')
         for row in statSoup('table')[1]('tr'):
             print ('\t' + row.text)
+	print ('\033[0m')
         print ('-------------------------------')
         for row in statSoup('table')[2]('tr'):
             print ('\t' + row.text)
