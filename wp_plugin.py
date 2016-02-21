@@ -50,30 +50,32 @@ class WPPlugin:
         return pageSoup['href']
 
     def ProcessPlugin(self, scanner):
-        if self.Downloads >= self.Limit:
-            previousPlugin = self.DataStore.GetPreviousPlugin(self)
-            #compare the retrieved row to the plugin in order to determine if we already have an entry for it.
-            if previousPlugin is None:
-                #insert new record for plugin
-                print ('Inserting new record for: ' + self.Name)
+	if self.Downloads < self.Limit:
+            print('Limit not reached, skipping ' + self.Name)
+            return
+        previousPlugin = self.DataStore.GetPreviousPlugin(self)
+        #compare the retrieved row to the plugin in order to determine if we already have an entry for it.
+        if previousPlugin is None:
+            #insert new record for plugin
+            print ('Inserting new record for: ' + self.Name)
+            self.DataStore.InsertPlugin(self)
+        else:
+            #do a comparison of the existing record, if it's changed update the record (insert new record with today's date)
+            if self.Version != previousPlugin[2]:
+                #Inform the user if a new version has appeared.
+                print (str.format("New version for {0} available!", self.Name))
                 self.DataStore.InsertPlugin(self)
-            else:
-                #do a comparison of the existing record, if it's changed update the record (insert new record with today's date)
-                if self.Version != previousPlugin[2]:
-                    #Inform the user if a new version has appeared.
-                    print (str.format("New version for {0} available!", self.Name))
-                    self.DataStore.InsertPlugin(self)
 
-            #Check if we need to download and update the source.
-            previousDownload = self.DataStore.GetPreviousDownload(self)
-            if previousDownload is not None and previousDownload == self.Version:
-                print (str.format("Plugin {0} is up-to-date.", self.Name))
-            else:
-                self.Downloader.DownloadPlugin(self)
-                self.Downloader.UnpackPlugin(self)
+        #Check if we need to download and update the source.
+        previousDownload = self.DataStore.GetPreviousDownload(self)
+        if previousDownload is not None and previousDownload == self.Version:
+            print (str.format("Plugin {0} is up-to-date.", self.Name))
+        else:
+            self.Downloader.DownloadPlugin(self)
+            self.Downloader.UnpackPlugin(self)
 
-            scanner.Scan(self)
-            scanner.GenerateReport(self)
+        scanner.Scan(self)
+        scanner.GenerateReport(self)
 
 
 class WPPluginFactory:
@@ -84,22 +86,16 @@ class WPPluginFactory:
         self.Downloader = downloader
         return
 
-    def ParseSinglePluginHtml(self, htmlBlock):
-        soup = BeautifulSoup(htmlBlock)
-        pluginSoup = soup.find('div', attrs={'class': 'plugin-card'})
+    def ParseSinglePluginHtml(self, pluginSoup):
         plugin = WPPlugin(self.DataStore, self.Downloader)
         #The basics
-        plugin.Name = str(pluginSoup.find('div', attrs={'class': 'name'}).text)
-        plugin.Page = pluginSoup.a['href']
-        plugin.Description = pluginSoup.text[len(pluginSoup.a.text):-len(pluginSoup.ul.text)]
+        plugin.Name = str(pluginSoup.find('div', attrs={'class': 'name column-name'}).text)
+        plugin.Page = pluginSoup.find('div', attrs={'class': 'name column-name'}).a['href']
+        plugin.Description = pluginSoup.find('div', attrs={'class': 'desc column-description'}).text
         #The harder stuff.
-        versionInfo = pluginSoup.ul.li
-        updatedInfo = versionInfo.nextSibling.nextSibling
-        downloadInfo = updatedInfo.nextSibling.nextSibling
-        plugin.Version = versionInfo.text[len(versionInfo.span.text):]
-        plugin.Updated = updatedInfo.text[len(updatedInfo.span.text):]
-        plugin.Downloads = int(downloadInfo.text[len(downloadInfo.span.text):].replace(',', ''))
-        plugin.Rating = pluginSoup.div.text
+        plugin.Updated = pluginSoup.find('div', attrs={'class': 'column-updated'}).span['title']
+        plugin.Downloads = int(pluginSoup.find('div', attrs={'class': 'column-installs'}).text.split('+')[0].replace(',',''))
+        plugin.Rating = pluginSoup.find('div', attrs={'class': 'wporg-ratings'})['title'].split(' ')[0]
         return plugin
 
     def ParseAllPluginsHtml(self, htmlBlock):
@@ -113,7 +109,7 @@ class WPPluginFactory:
         plugins = []
         for pluginSoup in pluginSoups:
             try:
-                plugin = self.ParseSinglePluginHtml(str(pluginSoup))
+                plugin = self.ParseSinglePluginHtml(pluginSoup)
                 plugins.append(plugin)
             except UnicodeEncodeError:
                 print (str.format("Could not process plugin because of unicode error... skipping!"))

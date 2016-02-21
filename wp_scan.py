@@ -47,7 +47,7 @@ class RipsScanner(WPScanner):
                     'treestyle':'1',
                     'stylesheet':'ayti'
         }
-        r = requests.post(url="http://localhost/rips-0.54/main.php", data=ripsopts)
+        r = requests.post(url="http://localhost/rips-0.55/main.php", data=ripsopts)
         self.scanResults = r.text
         return
 
